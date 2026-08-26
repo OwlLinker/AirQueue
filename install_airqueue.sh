@@ -27,11 +27,11 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  👤 用户 / User: $(whoami)"
 echo "  🏠 主目录 / Home: $HOME"
 
-# 获取 python3 真实路径：优先用 realpath 解析 symlink
-PYTHON_PATH=$(realpath "$(which python3)" 2>/dev/null)
-# 如果 realpath 失败或文件不存在，退回 which python3
-if [ -z "$PYTHON_PATH" ] || [ ! -f "$PYTHON_PATH" ]; then
-    PYTHON_PATH=$(which python3 2>/dev/null)
+# 获取 python3 真实路径：优先解析 symlink，LaunchAgent 和权限检测使用同一路径
+PYTHON_PATH=$(command -v python3 2>/dev/null || true)
+if [ -n "$PYTHON_PATH" ] && command -v realpath > /dev/null 2>&1; then
+    RESOLVED_PYTHON_PATH=$(realpath "$PYTHON_PATH" 2>/dev/null || true)
+    [ -n "$RESOLVED_PYTHON_PATH" ] && PYTHON_PATH="$RESOLVED_PYTHON_PATH"
 fi
 # 最终验证
 if [ -z "$PYTHON_PATH" ] || [ ! -f "$PYTHON_PATH" ]; then
@@ -71,7 +71,7 @@ check_fda() {
 }
 
 check_python_fda() {
-    python3 -c "import os; os.listdir(os.path.expanduser('~/Library/Safari'))" > /dev/null 2>&1
+    "$PYTHON_PATH" -c "import os; os.listdir(os.path.expanduser('~/Library/Safari'))" > /dev/null 2>&1
 }
 
 guide_fda() {
@@ -150,6 +150,13 @@ QUEUE_DIR        = Path.home() / "Library/Mobile Documents/iCloud~is~workflow~my
 LOG_FILE         = Path.home() / ".airqueue.log"
 ERROR_COUNT_FILE = Path.home() / ".airqueue_errors.json"   # FIX: 持久化错误计数
 
+def log(msg):
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}\n")
+    except OSError:
+        pass
+
 def smart_sleep():
     try:
         boot_raw = subprocess.check_output(['sysctl', '-n', 'kern.boottime']).decode()
@@ -168,7 +175,8 @@ MAX_ERRORS = 3
 # ── FIX: 错误计数持久化，跨进程累计 ──────────────────────
 def load_error_counts():
     try:
-        return json.loads(ERROR_COUNT_FILE.read_text(encoding='utf-8'))
+        counts = json.loads(ERROR_COUNT_FILE.read_text(encoding='utf-8'))
+        return counts if isinstance(counts, dict) else {}
     except Exception:
         return {}
 
@@ -180,31 +188,19 @@ def save_error_counts(counts):
 
 error_counts = load_error_counts()
 
-def log(msg):
-    with open(LOG_FILE, "a") as f:
-        f.write(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}\n")
+def apple_script_string(value):
+    escaped = str(value).replace("\\", "\\\\").replace('"', '\\"')
+    escaped = escaped.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t")
+    return f'"{escaped}"'
 
 def notify(title, body):
-    subprocess.run(["osascript", "-e", f'display notification "{body}" with title "{title}"'])
+    script = f"display notification {apple_script_string(body)} with title {apple_script_string(title)}"
+    result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+    if result.returncode != 0:
+        log(f"Warning / 通知发送失败 / notification failed: {result.stderr.strip()}")
 
 def notify_error(title, body):
     notify(title, body)
-
-def safe_filename(text):
-    text = text.replace('\\n', ' ').replace('\\r', ' ').strip()
-    has_chinese = bool(re.search(r'[\u4e00-\u9fff]', text))
-    has_english = bool(re.search(r'[a-zA-Z]', text))
-    if not has_chinese and has_english:
-        name = ' '.join(re.findall(r'[a-zA-Z]+', text)[:20])
-    else:
-        cn_count = 0; i = 0
-        while i < len(text) and cn_count < 20:
-            if re.match(r'[\u4e00-\u9fff]', text[i]): cn_count += 1
-            i += 1
-        while i < len(text) and re.match(r'[a-zA-Z]', text[i]): i += 1
-        name = text[:i].strip()
-    name = re.sub(r'[/\\:*?"<>|\n\r\t]', '', name).strip(' .')
-    return name or datetime.now().strftime("%Y%m%d%H%M%S")
 
 def wait_for_icloud(f, timeout=30, binary=False):
     subprocess.run(["brctl", "download", str(f)], capture_output=True)
@@ -219,53 +215,72 @@ def wait_for_icloud(f, timeout=30, binary=False):
         except Exception: return True
     return False
 
-# ── FIX: 兼容 Python < 3.5（无 json.JSONDecodeError）；
-#         fallback 时用正则抢救真实 content，避免文件名乱码 ──
+# ── FIX: fallback 时用正则抢救损坏 JSON 的真实字段 ───────
 def read_task(f):
     raw = f.read_text(encoding='utf-8').strip()
     try:
         return json.loads(raw)
-    except (json.JSONDecodeError, ValueError):
-        # 尝试从损坏的 JSON 中提取 type / content 字段
-        type_m    = re.search(r'"type"\s*:\s*"(\w+)"', raw)
-        content_m = re.search(r'"content"\s*:\s*"((?:[^"\\]|\\.)*)"', raw, re.DOTALL)
-        if content_m:
-            content = content_m.group(1).replace('\\"', '"').replace('\\n', '\n')
-            task_type = type_m.group(1) if type_m else "text"
+    except ValueError:
+        # 快捷指令旧版本直接拼接 JSON；内容含引号、反斜杠或换行时可能损坏。
+        type_m = re.search(r'"type"\s*:\s*"(\w+)"', raw)
+        task_type = type_m.group(1) if type_m else "text"
+
+        def salvage_field(field, following_fields):
+            marker = re.search(r'"' + re.escape(field) + r'"\s*:\s*"', raw)
+            if not marker:
+                return None
+            start = marker.end()
+            end = len(raw)
+            for next_field in following_fields:
+                boundary = re.search(r'"\s*,\s*"' + re.escape(next_field) + r'"\s*:', raw[start:])
+                if boundary:
+                    end = min(end, start + boundary.start())
+            if end == len(raw):
+                closing = raw.rfind('"')
+                if closing > start:
+                    end = closing
+            return raw[start:end].replace('\\"', '"').replace('\\n', '\n').replace('\\r', '\r')
+
+        if task_type == "file":
+            filename = salvage_field("filename", ["from", "time"])
+            if filename is not None:
+                log(f"Error / JSON 解析失败，已抢救字段 / recovered fields (type=file): {f.name}")
+                return {"type": "file", "filename": filename}
+        content = salvage_field("content", ["from", "time"])
+        if content is not None:
             log(f"Error / JSON 解析失败，已抢救字段 / recovered fields (type={task_type}): {f.name}")
             return {"type": task_type, "content": content}
-        # 完全无法解析，当作纯文本
         log(f"Error / JSON 解析失败，按纯文本处理 / processing as plain text: {f.name}")
         return {"type": "text", "content": raw}
 
 def handle_url(task):
-    subprocess.run(["open", task["content"]])
-    log(f"Opened URL / 已打开链接: {task['content']}")
+    content = task.get("content")
+    if not isinstance(content, str) or not content:
+        raise ValueError("URL content is empty / 链接内容为空")
+    result = subprocess.run(["open", content], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise OSError(f"open failed / 打开链接失败: {result.stderr.strip()}")
+    log(f"Opened URL / 已打开链接: {content}")
 
 def handle_file(task):
     import shutil
-    src = QUEUE_DIR / task["filename"]
-    dst = Path.home() / "Downloads" / task["filename"]
+    filename = task.get("filename")
+    if not isinstance(filename, str) or not filename or Path(filename).name != filename:
+        raise ValueError("invalid filename / 文件名无效")
+    src = QUEUE_DIR / filename
+    dst = Path.home() / "Downloads" / filename
     if not src.exists():
-        log(f"Warning / 文件不存在，跳过 / file missing, skipped: {src.name}"); return
+        if dst.exists():
+            log(f"Warning / 文件已保存，补删任务 / file already saved, cleaning task: {src.name}")
+            return
+        raise FileNotFoundError(f"file missing / 文件不存在: {src.name}")
     if not wait_for_icloud(src, binary=True):
         raise OSError(f"iCloud sync timeout / iCloud 文件同步超时: {src.name}")
     shutil.copy(src, dst); src.unlink()
-    subprocess.run(["open", str(dst.parent)])
+    result = subprocess.run(["open", str(dst.parent)], capture_output=True, text=True)
+    if result.returncode != 0:
+        log(f"Warning / 文件夹打开失败 / failed to open folder: {result.stderr.strip()}")
     log(f"Saved file / 已保存文件: {dst}")
-
-def handle_task_to_file(task):
-    content  = task.get("content", "")
-    base     = "airqueue_" + safe_filename(task.get("content", ""))   # FIX: 提前提取，避免 f-string 嵌套引号问题
-    filename = base + ".txt"
-    dst      = Path.home() / "Downloads" / filename
-    counter  = 1
-    while dst.exists():
-        dst = Path.home() / "Downloads" / f"{base}_{counter}.txt"   # FIX: 内层改用单引号
-        counter += 1
-    dst.write_text(content, encoding="utf-8")
-    log(f"Saved task file / 已保存任务文件: {dst}")
-    return dst
 
 def handle_text_to_clipboard(content):
     subprocess.run(["pbcopy"], input=content.encode("utf-8"), check=True)
@@ -289,6 +304,7 @@ def process_queue():
                         if not f.startswith('.') and f.startswith('task_')])
     all_files = [QUEUE_DIR / f for f in files]
     url_files, file_files, text_files = [], [], []
+    processed_count = 0
 
     for f in all_files:
         try:
@@ -299,6 +315,8 @@ def process_queue():
             if t == "url":    url_files.append((f, task))
             elif t == "file": file_files.append((f, task))
             elif t == "text": text_files.append((f, task))
+            else:
+                log(f"Warning / 未知任务类型 / unknown task type {t}: {f.name}")
         except Exception as e:
             name = f.name
             error_counts[name] = error_counts.get(name, 0) + 1
@@ -317,13 +335,28 @@ def process_queue():
         try:
             handle_url(task); f.unlink(); error_counts.pop(f.name, None)
             save_error_counts(error_counts)
+            processed_count += 1
         except Exception as e:
-            log(f"Error / 错误: {e}"); notify_error("AirQueue（隔空随达）❌", f"链接打开失败 / Failed to open URL: {f.name}")
+            name = f.name
+            error_counts[name] = error_counts.get(name, 0) + 1
+            save_error_counts(error_counts)
+            if error_counts[name] >= MAX_ERRORS:
+                log(f"Error / 放弃处理 / giving up on {name}: {e}")
+                notify_error("AirQueue（隔空随达）❌", f"链接打开失败 / Failed to open URL: {name}")
+                try: f.unlink()
+                except OSError: pass
+                error_counts.pop(name, None)
+                save_error_counts(error_counts)
+            else:
+                log(f"Error / 链接打开失败 / URL open failed {name} (attempt {error_counts[name]}): {e}")
+                if error_counts[name] == 1:
+                    notify_error("AirQueue（隔空随达）⚠️", f"链接打开失败，稍后重试 / URL failed; retrying: {name}")
 
     for f, task in file_files:
         try:
             handle_file(task); f.unlink(); error_counts.pop(f.name, None)
             save_error_counts(error_counts)
+            processed_count += 1
         except Exception as e:
             name = f.name
             error_counts[name] = error_counts.get(name, 0) + 1
@@ -338,7 +371,6 @@ def process_queue():
                 log(f"Error / 错误 {name} (attempt {error_counts[name]}): {e}")
 
     if text_files:
-        copied_count = 0
         for f, task in text_files:
             name = f.name
             try:
@@ -347,7 +379,7 @@ def process_queue():
                     try: handle_url({**task, "content": c})
                     except Exception as e: log(f"Error / 链接打开失败 / failed to open URL: {e}")
                 handle_text_to_clipboard(c)
-                copied_count += 1; f.unlink()
+                processed_count += 1; f.unlink()
                 error_counts.pop(name, None)
                 save_error_counts(error_counts)
             except Exception as e:
@@ -363,9 +395,9 @@ def process_queue():
                     log(f"Error / 错误 {name} (attempt {error_counts[name]}): {e}")
                     if error_counts[name] == 1:
                         notify_error("AirQueue（隔空随达）⚠️", f"处理出错，正在重试 / Error; retrying: {name}")
-        if copied_count:
-            notify("AirQueue（隔空随达）✅", f"已写入剪贴板 / Written to clipboard: {copied_count} task(s)")
-            log(f"Copied {copied_count} text task(s) to clipboard / 已复制 {copied_count} 个文本任务")
+    if processed_count:
+        notify("AirQueue（隔空随达）✅", f"已处理 {processed_count} 个任务 / Processed {processed_count} task(s)")
+        log(f"Processed {processed_count} task(s) / 已处理 {processed_count} 个任务")
 
 if __name__ == "__main__":
     cleanup_old_logs()
@@ -467,11 +499,18 @@ cat > "$HOME/Library/LaunchAgents/com.user.airqueue.plist" << PLIST
 </plist>
 PLIST
 
-launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/com.user.airqueue.plist" \
-    || { echo "  $MSG_NO_LOAD"; cat /tmp/airqueue.stderr 2>/dev/null | tail -5; exit 1; }
+if ! launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/com.user.airqueue.plist"; then
+    echo "  $MSG_NO_LOAD"
+    cat /tmp/airqueue.stderr 2>/dev/null | tail -5
+    exit 1
+fi
 
 sleep 2
-SVC=$(launchctl list | grep "com.user.airqueue")
+if ! SVC=$(launchctl list | grep "com.user.airqueue"); then
+    echo "  $MSG_NO_LOAD"
+    echo "  请检查 /tmp/airqueue.stderr / Check /tmp/airqueue.stderr"
+    exit 1
+fi
 PID=$(echo "$SVC" | awk '{print $1}')
 
 echo ""

@@ -1,5 +1,9 @@
 # AirQueue（隔空随达）
 
+**快速导航 / Quick navigation:** [🇨🇳 中文](#chinese) · [🇬🇧 English](#english)
+
+<a id="chinese"></a>
+
 ## 把 iPhone 上的内容，安静地送到 Mac
 
 AirQueue 是一个基于 **iCloud Drive + Apple 快捷指令 + macOS 后台服务** 的跨设备内容投递工具。
@@ -115,11 +119,25 @@ flowchart LR
 
 在 iPhone 或 iPad 上打开上面的 iCloud 链接，点击「获取快捷指令」或「添加快捷指令」。首次使用时，建议先运行一次，使 iCloud Drive 自动创建队列目录。
 
-### 2. 确认 iCloud Drive
+### 2. :iphone: 添加到控制中心 / 快捷操作
+
+为了随时一键发送，建议把「隔空随达」添加到控制中心：
+
+1. 打开控制中心，长按空白处或点击左上角的 `+`
+2. 点击「添加控制」
+3. 搜索并选择「快捷指令」
+4. 选择「隔空随达」并拖动到方便的位置
+5. 点击空白处完成编辑
+
+配置完成后，在控制中心点击「隔空随达」即可直接运行：
+
+![将“隔空随达”添加到控制中心](./assets/airqueue-control-center.png)
+
+### 3. 确认 iCloud Drive
 
 发送端和接收端需要使用同一个 Apple 账户，并确保两台设备都开启了 iCloud Drive 与快捷指令同步。
 
-### 3. 获取 Mac 端程序
+### 4. 获取 Mac 端程序
 
 ```bash
 git clone https://github.com/OwlLinker/AirQueue.git
@@ -221,6 +239,16 @@ airqueue_errors      # 查看错误日志
 airqueue_uninstall   # 卸载服务，保留 iCloud 队列目录
 ```
 
+### 卸载 AirQueue
+
+在 Mac 终端运行：
+
+```bash
+airqueue_uninstall
+```
+
+该命令会移除 Mac 后台服务、watcher、管理命令和本地日志，但会保留 iCloud 队列目录与 iPhone/iPad 上的「隔空随达」快捷指令。卸载后请重新打开终端，或执行 `source ~/.zshrc`。
+
 默认日志文件：
 
 ```text
@@ -264,7 +292,6 @@ AirQueue 会先使用 macOS 的 `pbcopy` 写入系统剪贴板，再由剪贴板
 AirQueue/
 ├── .gitignore
 ├── install_airqueue.sh
-├── AirQueue_快捷指令设置指南.md
 └── README.md
 ```
 
@@ -273,6 +300,8 @@ AirQueue/
 当前仓库尚未声明开源许可证。除非另有明确授权，请不要默认将代码用于再发布或商业分发。
 
 ---
+
+<a id="english"></a>
 
 # AirQueue (隔空随达) — English
 
@@ -381,11 +410,25 @@ The Shortcut creates a timestamp, classifies the input, writes a JSON task to th
 
 Open the iCloud link on an iPhone or iPad and tap **Get Shortcut** or **Add Shortcut**. Run it once so iCloud Drive creates the queue directory.
 
-### 2. Prepare iCloud Drive
+### 2. :iphone: Add it to Control Center / Quick Actions
+
+For one-tap access, add **隔空随达** to Control Center:
+
+1. Open Control Center, then long-press an empty area or tap the `+` button.
+2. Tap **Add a Control**.
+3. Search for and select **Shortcut**.
+4. Choose **隔空随达** and move it to a convenient position.
+5. Tap an empty area to finish editing.
+
+Once configured, tap **隔空随达** in Control Center to run it immediately:
+
+![Add “隔空随达” to Control Center](./assets/airqueue-control-center.png)
+
+### 3. Prepare iCloud Drive
 
 Use the same Apple Account on the sending device and the Mac. Make sure iCloud Drive and Shortcuts sync are enabled on both devices.
 
-### 3. Install the Mac service
+### 4. Install the Mac service
 
 ```bash
 git clone https://github.com/OwlLinker/AirQueue.git
@@ -455,6 +498,16 @@ airqueue_errors       # View the error log
 airqueue_uninstall   # Uninstall the service; keep the iCloud queue
 ```
 
+### Uninstall AirQueue
+
+Run this in Terminal on your Mac:
+
+```bash
+airqueue_uninstall
+```
+
+This removes the Mac background service, watcher, management commands, and local logs. It keeps the iCloud queue directory and the “隔空随达” Shortcut on your iPhone/iPad. Reopen Terminal afterward, or run `source ~/.zshrc`.
+
 Default log file: `~/.airqueue.log`.
 
 ## :mag: Troubleshooting
@@ -490,7 +543,6 @@ Check Full Disk Access for the Python background process and wait for iCloud syn
 AirQueue/
 ├── .gitignore
 ├── install_airqueue.sh
-├── AirQueue_快捷指令设置指南.md
 └── README.md
 ```
 
