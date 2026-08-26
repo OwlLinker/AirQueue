@@ -1,0 +1,5 @@
+# Ignore hidden files and directories at every level.
+.*
+
+# Keep the ignore rules themselves in the repository.
+!.gitignore
