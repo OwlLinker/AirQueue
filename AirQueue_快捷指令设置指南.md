@@ -1,4 +1,4 @@
-# AirRelay 快捷指令完整设置指南
+# AirQueue（隔空随达）快捷指令完整设置指南 | Complete Shortcut Setup Guide
 
 将 iPhone 上的链接、文字、文件一键投递到 Mac，Mac 登录后自动打开/保存/复制。
 
