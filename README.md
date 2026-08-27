@@ -1,6 +1,6 @@
 # AirQueue（隔空随达）
 
-**快速导航 / Quick navigation:** [🇨🇳 中文](#chinese) · [🇬🇧 English](#english)
+**快速导航 / Quick navigation:** [🇨🇳 中文](#chinese) · [🇺🇸 English](#english)
 
 <a id="chinese"></a>
 
@@ -131,7 +131,7 @@ flowchart LR
 
 配置完成后，在控制中心点击「隔空随达」即可直接运行：
 
-![将“隔空随达”添加到控制中心](./assets/airqueue-control-center.png)
+<img src="./assets/airqueue-control-center.png" width="360" alt="将“隔空随达”添加到控制中心">
 
 ### 3. 确认 iCloud Drive
 
@@ -422,7 +422,7 @@ For one-tap access, add **隔空随达** to Control Center:
 
 Once configured, tap **隔空随达** in Control Center to run it immediately:
 
-![Add “隔空随达” to Control Center](./assets/airqueue-control-center.png)
+<img src="./assets/airqueue-control-center.png" width="360" alt="Add “隔空随达” to Control Center">
 
 ### 3. Prepare iCloud Drive
 
