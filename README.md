@@ -239,6 +239,18 @@ airqueue_errors      # 查看错误日志
 airqueue_uninstall   # 卸载服务，保留 iCloud 队列目录
 ```
 
+### 重启已安装的服务
+
+在此前已授权 AirQueue 访问 iCloud 的 Terminal 中运行：
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.user.airqueue
+sleep 2
+tail -n 5 ~/.airqueue.log
+```
+
+看到新的 `watcher started` 日志即表示服务已启动。此操作只重启已安装的 LaunchAgent，不会更改其 Python 路径；代码更新后也不必重新运行安装器。若从其他执行环境看到 `PermissionError`，先回到原先运行 AirQueue 的 Terminal 重启，不要据此重设权限或替换 Python。
+
 ### 卸载 AirQueue
 
 在 Mac 终端运行：
@@ -497,6 +509,18 @@ airqueue_log         # View the runtime log
 airqueue_errors       # View the error log
 airqueue_uninstall   # Uninstall the service; keep the iCloud queue
 ```
+
+### Restart the installed service
+
+Run this in the Terminal that already has AirQueue's iCloud access:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.user.airqueue
+sleep 2
+tail -n 5 ~/.airqueue.log
+```
+
+A new `watcher started` log entry confirms startup. This only restarts the installed LaunchAgent and preserves its Python path; a code-only update does not require rerunning the installer. If another execution environment reports `PermissionError`, retry from the Terminal that has run AirQueue successfully before changing permissions or replacing Python.
 
 ### Uninstall AirQueue
 
