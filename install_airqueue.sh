@@ -283,8 +283,30 @@ def handle_file(task):
     log(f"Saved file / 已保存文件: {dst}")
 
 def handle_text_to_clipboard(content):
+    downloads = Path.home() / "Downloads"
+    downloads.mkdir(parents=True, exist_ok=True)
+
+    # Use the first 40 visible characters as the filename, while keeping it valid on macOS.
+    prefix = " ".join(content.split())[:40]
+    prefix = re.sub(r'[/:\x00-\x1f\x7f]', "_", prefix).replace("\\", "_").strip(" .")
+    if not prefix:
+        prefix = "文本"
+
+    path = downloads / f"{prefix}.txt"
+    suffix = 2
+    while path.exists():
+        try:
+            if path.read_text(encoding="utf-8") == content:
+                break
+        except (OSError, UnicodeError):
+            pass
+        path = downloads / f"{prefix}-{suffix}.txt"
+        suffix += 1
+    if not path.exists():
+        path.write_text(content, encoding="utf-8")
+
     subprocess.run(["pbcopy"], input=content.encode("utf-8"), check=True)
-    log("Copied text to clipboard / 文本已写入剪贴板")
+    log(f"Saved text and copied to clipboard / 文本已保存并写入剪贴板: {path.name}")
 
 def cleanup_old_logs(days=7):
     if not LOG_FILE.exists(): return

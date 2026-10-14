@@ -11,7 +11,7 @@ AirQueue 是一个基于 **iCloud Drive + Apple 快捷指令 + macOS 后台服�
 当 AirDrop 不方便、Mac 暂时不在线，或者你不想在手机和电脑之间反复切换时，只需在 iPhone 或 iPad 上分享一次内容。AirQueue 会把任务放入 iCloud 队列，Mac 登录后自动接收并处理：
 
 - 链接自动用默认浏览器打开
-- 文本自动写入 Mac 剪贴板
+- 文本自动写入 Mac 剪贴板，并以文本开头一段字符命名后保存到 `~/Downloads`
 - 文件自动保存到 `~/Downloads`
 - 剪贴板中的链接、文本和文件也可以直接投递
 
@@ -50,7 +50,7 @@ AirQueue 采用文件队列而不是实时连接。手机端先将任务写入 i
 它会根据输入内容自动选择处理路径：
 
 - URL：生成链接任务，Mac 端打开默认浏览器
-- 普通文本：生成文本任务，Mac 端写入剪贴板
+- 普通文本：生成文本任务，Mac 端写入剪贴板并保存为 `.txt` 文件
 - 文件：先传输文件本体，再生成文件任务描述，Mac 端保存到 Downloads
 - 剪贴板：区分剪贴板链接、文本和文件，沿用对应处理逻辑
 
@@ -60,7 +60,7 @@ AirQueue 采用文件队列而不是实时连接。手机端先将任务写入 i
 
 ### :clipboard: 与剪贴板工作流自然衔接
 
-文本任务写入系统剪贴板后，可直接在 Mac 上按 `⌘V` 使用；如果同时运行剪贴板历史工具，例如 OwlLinkerHS，剪贴板变化也可以被其监听并记录。
+文本任务会写入系统剪贴板，并在 `~/Downloads` 保存为 `.txt` 文件。文件名取文本开头最多 40 个字符；如果同名文件已有不同内容，会自动追加序号。写入剪贴板后可直接按 `⌘V` 使用；剪贴板历史工具也可以监听并记录变化。
 
 ### :shield: 有日志、有重试、有失败保护
 
@@ -70,7 +70,7 @@ Mac 服务具备以下基础可靠性措施：
 - JSON 解析失败时尝试抢救任务类型和正文
 - 处理失败自动重试，连续失败后记录并通知
 - 运行日志与错误日志可独立查看
-- 文本只有在 `pbcopy` 成功后才从队列中删除
+- 文本文件保存且 `pbcopy` 成功后才从队列中删除
 
 ## :arrows_counterclockwise: 工作流程
 
@@ -88,7 +88,7 @@ flowchart LR
     G --> H
     H --> I[Mac LaunchAgent]
     I -->|URL| J[默认浏览器打开]
-    I -->|文本| K[写入系统剪贴板]
+    I -->|文本| K[写入剪贴板并保存 TXT 到 Downloads]
     I -->|文件| L[保存到 Downloads]
     I --> M[删除已处理任务并发送通知]
 ```
@@ -172,7 +172,7 @@ bash install_airqueue.sh
 直接运行「隔空随达」快捷指令即可读取当前剪贴板：
 
 - 剪贴板是链接：Mac 自动打开链接
-- 剪贴板是文本：Mac 自动写入剪贴板
+- 剪贴板是文本：Mac 自动写入剪贴板并保存为 TXT 到 `~/Downloads`
 - 剪贴板是文件：Mac 自动保存文件
 - 剪贴板为空：快捷指令提示「剪贴板是空的」
 
@@ -181,10 +181,10 @@ bash install_airqueue.sh
 | 输入类型 | Mac 端行为 |
 |---|---|
 | 分享链接 | 使用默认浏览器打开 |
-| 分享文本 | 写入系统剪贴板，可直接 `⌘V` 粘贴 |
+| 分享文本 | 写入系统剪贴板并保存为 TXT 到 `~/Downloads` |
 | 分享文件 | 保存到 `~/Downloads` 并打开文件夹 |
 | 剪贴板链接 | 使用默认浏览器打开 |
-| 剪贴板文本 | 写入系统剪贴板 |
+| 剪贴板文本 | 写入系统剪贴板并保存为 TXT 到 `~/Downloads` |
 | 剪贴板文件 | 保存到 `~/Downloads` |
 
 ## :page_facing_up: 任务格式
@@ -270,7 +270,7 @@ airqueue_uninstall
 
 AirQueue 会先使用 macOS 的 `pbcopy` 写入系统剪贴板，再由剪贴板历史工具监听系统剪贴板变化。请确认：
 
-- AirQueue 日志中出现 `Copied text to clipboard`
+- AirQueue 日志中出现 `Saved text and copied to clipboard`
 - 剪贴板历史工具正在运行
 - 剪贴板历史工具的监听模块已初始化
 
@@ -312,7 +312,7 @@ AirQueue is a cross-device delivery tool built on **iCloud Drive, Apple Shortcut
 When AirDrop is inconvenient, your Mac is temporarily offline, or you simply want to avoid switching between devices, share the content once from your iPhone or iPad. AirQueue places the task in an iCloud queue and processes it automatically when the Mac is available:
 
 - :link: URLs open in the default browser
-- :clipboard: Text is written to the macOS clipboard
+- :clipboard: Text is written to the macOS clipboard and saved as a named `.txt` file in `~/Downloads`
 - :file_folder: Files are saved to `~/Downloads`
 - :package: Clipboard URLs, text, and files can also be delivered directly
 
@@ -334,7 +334,7 @@ This gives you a focused and more controllable cross-device workflow:
 - :sparkles: Keep browsing without interrupting your current task
 - :lock: Avoid social apps, chat windows, and third-party bots
 - :cloud: Use your own iCloud Drive as the transport layer
-- :computer: Let the Mac open the link, save the file, or prepare the text in your clipboard later
+- :computer: Let the Mac open the link, save the file, or prepare the text in your clipboard and Downloads later
 
 ## :star2: Highlights
 
@@ -351,7 +351,7 @@ The “隔空随达” Shortcut runs as a Share Sheet action extension. It accep
 AirQueue identifies the content and selects the matching workflow:
 
 - :link: URL → create a URL task → open it on the Mac
-- :memo: Text → create a text task → write it to the Mac clipboard
+- :memo: Text → create a text task → write it to the Mac clipboard and save a `.txt` file
 - :page_facing_up: File → upload the file and task metadata → save it to Downloads
 - :clipboard: Clipboard → detect URL, text, or file → use the matching workflow
 
@@ -365,7 +365,7 @@ The installer registers a LaunchAgent. The service starts at user login, watches
 - Attempts to recover the type and content from malformed JSON
 - Retries failed tasks and records repeated failures
 - Keeps a runtime log and an error log
-- Removes text tasks only after `pbcopy` succeeds
+- Removes text tasks only after the text file is saved and `pbcopy` succeeds
 
 ## :arrows_counterclockwise: Architecture
 
@@ -383,7 +383,7 @@ flowchart LR
     G --> H
     H --> I[macOS LaunchAgent]
     I -->|URL| J[Open default browser]
-    I -->|Text| K[Write system clipboard]
+    I -->|Text| K[Write clipboard and save TXT to Downloads]
     I -->|File| L[Save to Downloads]
     I --> M[Delete task and notify]
 ```
@@ -455,7 +455,7 @@ macOS may ask you to grant **Full Disk Access** to the terminal running the inst
 Run **隔空随达** directly:
 
 - :link: Clipboard URL → open on the Mac
-- :clipboard: Clipboard text → write to the Mac clipboard
+- :clipboard: Clipboard text → write to the Mac clipboard and save a named TXT file in `~/Downloads`
 - :page_facing_up: Clipboard file → save to Downloads
 - :warning: Empty clipboard → show “剪贴板是空的”
 
@@ -464,10 +464,10 @@ Run **隔空随达** directly:
 | Input | Mac-side result |
 |---|---|
 | Shared URL | Open in the default browser |
-| Shared text | Write to the system clipboard; paste with `⌘V` |
+| Shared text | Write to the system clipboard and save a TXT file to `~/Downloads` |
 | Shared file | Save to `~/Downloads` and open the folder |
 | Clipboard URL | Open in the default browser |
-| Clipboard text | Write to the system clipboard |
+| Clipboard text | Write to the system clipboard and save a TXT file to `~/Downloads` |
 | Clipboard file | Save to `~/Downloads` |
 
 ## :page_facing_up: Task format
@@ -523,7 +523,7 @@ Default log file: `~/.airqueue.log`.
 
 ### Text is missing from clipboard history
 
-AirQueue writes text through macOS `pbcopy`. A clipboard history tool then needs to observe the system clipboard change. Confirm the AirQueue log contains `Copied text to clipboard`, and that the clipboard history watcher is running.
+AirQueue writes text through macOS `pbcopy` and saves a TXT file in `~/Downloads`. A clipboard history tool then needs to observe the system clipboard change. Confirm the AirQueue log contains `Saved text and copied to clipboard`, and that the clipboard history watcher is running.
 
 ### File processing fails
 
